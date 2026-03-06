@@ -13,11 +13,55 @@ services:
       - POSTGRES_PASSWORD=postgres
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - VLLM_HOST=vllm
+      - VLLM_PORT=8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      vllm:
+        condition: service_healthy
+    networks:
+      - ai-network
+
+  vllm:
+    image: vllm/vllm-openai:latest-cpu
+    ports:
+      - "8001:8000"
+    environment:
+      - MODEL=HuggingFaceTB/SmolLM2-135M-Instruct
+      - TOKENIZER_MODE=auto
+      - TRUST_REMOTE_CODE=true
+      - CUDA_VISIBLE_DEVICES=""
+      - VLLM_FORCE_CPU=1
+      - VLLM_LOGGING_LEVEL=DEBUG
+      - MAX_TOKENS=2048
+    volumes:
+      - ./models:/models
+    command: >
+      --model HuggingFaceTB/SmolLM2-135M-Instruct
+      --host 0.0.0.0
+      --port 8000
+      --trust-remote-code
+      --device cpu
+      --max-model-len 2048
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - ai-network
+    # Uncomment below if you have GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   postgres:
     image: postgres:16-alpine
@@ -26,23 +70,38 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: db1
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d db1"]
       interval: 2s
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - ai-network
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
       timeout: 5s
       retries: 5
       start_period: 2s
+    networks:
+      - ai-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ai-network:
+    driver: bridge

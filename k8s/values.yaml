@@ -1,0 +1,87 @@
+# Global settings
+global:
+  namespace: default
+
+# API Settings
+api:
+  replicaCount: 2
+  image:
+    repository: foxelvoret/ai-assistant
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# vLLM Settings
+vllm:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: vllm/vllm-openai
+    tag: "latest"
+  
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  
+  model: "SmolLM2-135M-Instruct"
+  maxTokens: 2048
+  temperature: 0.7
+
+# Database Settings
+database:
+  host: ""  # Will be set from Terraform outputs
+  port: 5432
+  name: "db1"
+  username: ""  # Will be set from secret
+  password: ""  # Will be set from secret
+
+# Redis Settings
+redis:
+  host: ""  # Will be set from Terraform outputs
+  port: 6379
+
+# Ingress Settings
+ingress:
+  enabled: true
+  className: "alb"
+  host: ""
+  path: "/"
+  pathType: Prefix
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+
+# Service Account (IRSA)
+serviceAccount:
+  create: true
+  name: ai-assistant
+  annotations:
+    # Will be set from Terraform outputs
+    # eks.amazonaws.com/role-arn: arn:aws:iam::account:role/ai-assistant-irsa
+
+# Database Initialization
+dbInit:
+  enabled: true
+
+# Secrets
+secrets:
+  # Database credentials from AWS Secrets Manager
+  dbSecretArn: ""  # Will be set from Terraform outputs

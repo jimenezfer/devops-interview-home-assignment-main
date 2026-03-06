@@ -1,0 +1,68 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ai-assistant.fullname" . }}-db-migrate-{{ .Release.Revision }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 120
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: postgres:16
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ai-assistant-db-secret
+              key: password
+        - name: DATABASE_HOST
+          value: "{{ .Values.database.host }}"
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: ai-assistant-db-secret
+              key: username
+        command:
+        - psql
+        - -h
+        - $(DATABASE_HOST)
+        - -U
+        - $(DATABASE_USER)
+        - -d
+        - db1
+        - -c
+        - |
+          CREATE TABLE IF NOT EXISTS question_history (
+              id SERIAL PRIMARY KEY,
+              question TEXT NOT NULL,
+              answer TEXT NOT NULL,
+              model VARCHAR(100) NOT NULL DEFAULT 'SmolLM2-135M-Instruct',
+              response_time_ms INTEGER,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              user_session_id VARCHAR(255)
+          );
+          
+          CREATE TABLE IF NOT EXISTS question_cache (
+              id SERIAL PRIMARY KEY,
+              question_hash VARCHAR(64) UNIQUE NOT NULL,
+              question TEXT NOT NULL,
+              answer TEXT NOT NULL,
+              model VARCHAR(100) NOT NULL,
+              hit_count INTEGER DEFAULT 1,
+              last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          
+          CREATE TABLE IF NOT EXISTS api_metrics (
+              id SERIAL PRIMARY KEY,
+              endpoint VARCHAR(50) NOT NULL,
+              response_time_ms INTEGER,
+              status_code INTEGER NOT NULL,
+              user_agent TEXT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+      restartPolicy: OnFailure

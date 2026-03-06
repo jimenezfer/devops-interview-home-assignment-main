@@ -1,0 +1,73 @@
+{{- if .Values.vllm.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-assistant.fullname" . }}-vllm
+  labels:
+    {{- include "ai-assistant.labels" . | nindent 4 }}
+    component: vllm
+spec:
+  replicas: {{ .Values.vllm.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ai-assistant.selectorLabels" . | nindent 6 }}
+      component: vllm
+  template:
+    metadata:
+      labels:
+        {{- include "ai-assistant.selectorLabels" . | nindent 8 }}
+        component: vllm
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+      - name: vllm
+        image: "{{ .Values.vllm.image.repository }}:{{ .Values.vllm.image.tag }}"
+        imagePullPolicy: IfNotPresent
+        command:
+        - python
+        - -m
+        - vllm.entrypoints.openai.api_server
+        - --model
+        - {{ .Values.vllm.model }}
+        - --host
+        - {{ .Values.vllm.host }}
+        - --port
+        - {{ .Values.vllm.port | quote }}
+        - --device
+        - {{ .Values.vllm.device }}
+        - --max-model-len
+        - {{ .Values.vllm.maxModelLen | quote }}
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MODEL
+          value: "{{ .Values.vllm.model }}"
+        - name: TOKENIZER_MODE
+          value: "auto"
+        - name: TRUST_REMOTE_CODE
+          value: "true"
+        - name: CUDA_VISIBLE_DEVICES
+          value: ""
+        - name: VLLM_FORCE_CPU
+          value: "1"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        - name: MAX_TOKENS
+          value: "{{ .Values.vllm.maxTokens }}"
+        resources:
+          {{- toYaml .Values.vllm.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+{{- end }}

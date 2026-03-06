@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-assistant.fullname" . }}-api
+  labels:
+    {{- include "ai-assistant.labels" . | nindent 4 }}
+    component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ai-assistant.selectorLabels" . | nindent 6 }}
+      component: api
+  template:
+    metadata:
+      labels:
+        {{- include "ai-assistant.selectorLabels" . | nindent 8 }}
+        component: api
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+      - name: api
+        image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+        imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.api.service.targetPort }}
+        env:
+        - name: POSTGRES_HOST
+          value: "{{ .Values.database.host }}"
+        - name: POSTGRES_PORT
+          value: "{{ .Values.database.port }}"
+        - name: POSTGRES_DB
+          value: "{{ .Values.database.name }}"
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-assistant.fullname" . }}-db-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-assistant.fullname" . }}-db-secret
+              key: password
+        - name: REDIS_HOST
+          value: "{{ .Values.redis.host }}"
+        - name: REDIS_PORT
+          value: "{{ .Values.redis.port }}"
+        - name: VLLM_HOST
+          value: "{{ include "ai-assistant.fullname" . }}-vllm"
+        - name: VLLM_PORT
+          value: "8000"
+        - name: VLLM_URL
+          value: "http://{{ include "ai-assistant.fullname" . }}-vllm:8000"
+        resources:
+          {{- toYaml .Values.api.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.api.service.targetPort }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.api.service.targetPort }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
